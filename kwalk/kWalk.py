@@ -138,7 +138,7 @@ def limkWalks(K,G,L=50,iteration=1):
 
 
       #this will use 'edge weight' attribute.
-    dgr=np.apply_along_axis(sum,0,adjm)
+    dgr=np.apply_along_axis(sum, 0,adjm)
     Pm=(adjm/dgr).transpose()    #initial transition matrix
 
     collect=set(K)
@@ -260,7 +260,7 @@ def limkWalks(K,G,L=50,iteration=1):
     return subg
 
 
-def limkSearch(K,G,L=50,iteration=1):
+def limkSearch(K, G ,L=3 ,iteration=1):
     '''
     Find subnetwork from a set of terminals using limited k-walk algorithm.
     K: terminals
@@ -275,15 +275,47 @@ def limkSearch(K,G,L=50,iteration=1):
     return subG
 
 
+def get_k_neighbor(G, L, node):
+    seed = []
+    pre_node =  nx.predecessor(G, node, None, L)
+    for index in pre_node:
+        seed += pre_node[index]
+
+    return seed
+
+def get_k_neighbor_term(G, term, L):
+    seed = []
+    for item in term:
+        pre_node = get_k_neighbor(G, L, item)
+        seed += pre_node
+
+    return set(seed)
+
 if __name__=='__main__':
     print 'Now testing limited k-walk algorithm now...'
     from gr_io import *
-    G=read_edgelist('testdata/lesmis.net')
+    print 'Reading Net data...'
+    G=read_edgelist('testdata/humanNet.net')
 
-    term=read_terminals('testdata/lesmis.terminal')
+    print 'Pathway data...'
+    term=read_terminals('testdata/terminal.txt')
+    seed = get_k_neighbor_term(G, term, 2)
+    print seed
+
+
+
+    small = G.subgraph(list(seed))
+    print 'Before expansion...'
+   
+
     t1=time.time()
-    g=limkSearch(term,G,L=10,iteration=1)
+    print 'During Searching...'
+    g=limkSearch(term, small, L=3 ,iteration=1)
+    print 'After expansion'
+    #print g.edges()
     #print g.nodes()
     #print g.edges()
+    #print set(small.edges()) - set(g.edges())
     t2=time.time()
+    print 'Running Time:'
     print t2 - t1
