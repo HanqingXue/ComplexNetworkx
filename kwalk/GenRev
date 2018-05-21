@@ -1,0 +1,483 @@
+#!/usr/bin/env python
+'''
+Version: 1.0
+Author: Siyuan Zheng, syzhenger@gmail.com
+Affiliation: Bioinformatics and Systems Biology Laboratory, Vanderbilt University
+License: GNU GPL
+Cite: See document.
+Calling module. 
+'''
+
+import os
+import sys
+from gr_io import *
+import time
+import tools
+import numpy
+import version
+
+
+##############################################################################################
+pop_msg='''\nTo see the parameters, please type GenRev -h
+For citation and contact, please see GenRev document.\n'''
+
+welcome_msg='''GenRev was developed by Siyuan Zheng at Shanghai Institutes for Biological 
+Sciences, Shanghai, China and Vanderbilt University, Nashville, TN United States.
+'''
+
+no_par_msg='No parameters input!\n'
+
+help_msg='''Example command line:
+GenRev -a steiner -g toy1.net -n toy1_node.score -t toy1.terminal\n
+Parameters in GenRev:
+-h        Show all parameters.
+-v        Show the current version of GenRev.
+-a        Algorithm selection. Three algorithms are available, please specify one of
+          'heuristic', 'steiner', 'kwalk' for your selection. Note there are some
+          algorithm specific parameters. 
+-s        The informative factor. Default is 1. Set to F if no network shrinking
+          is wanted. This factor defines how GenRev reduces the global network to a
+          more compact, but yet informative network. 
+-g        The network file path. Network file is space or tab delimited. The first
+          two columns are vertices, the third column is edge score. Larger score
+          indicate more close relations. This edge column is optional. If omitted,
+          all edges are thought to have equal scores of 1.
+-n        The node score file. Node file is space or tab delimited. The first column
+          is node name, and the second column is node score. Node scores should be
+          positive. This file is optional. If omitted, all nodes are thought to have
+          equal scores of 1.
+-t        The terminal nodes file. In GenRev, the input genes for subnetwork
+          extraction are called terminals. This file is of single column, with each
+          line is a node name.
+-d        Set the search radius in heuristic local search algorithm. Only valid when
+          algorithm parameter set to 'heuristic'. Default value is 2. It should set to
+          positive integers. 
+-r        Set the network score increment rate. Default is 0.1, range is (0,1). Only
+          valid for heuristic algorithm.
+-L        Set the maximal walk length in limited k-walk algorithm. Default is 50. It
+          should set to positive integers.
+-it       Set the iteration times for k-walk algorithm.Default is 1. 
+-cl       If MCL clustering will be applied. Default if T. Alternative option is F.
+          If result network have more than 500 nodes, -cl is automatically set to F.
+-o        The output directory for the analysis results.If omitted, GenRev will
+          automatically create output directory in the current location.  
+'''
+
+stop_msg='''GenRev stopped!\n'''
+
+mcl_non_msg='''Module detection by MLC algorithm is neglected.\n'''
+################################################################################################
+#Read parameters from the command line. 
+
+print pop_msg        #print the tip message. 
+
+#initial parameter setting.
+version=version.version    #GenRev version.
+algorithm=None             #algorithm. must.
+shrink_d=None              #shrink radius.
+netfile=None               #network file. must.
+nodemetafile=None          #node score file. Optional. 
+terminalfile=None          #terminal file. must.
+outputDir=autoDetectDir(path='./')    #output directory. Optional. 
+mcl_status=None            #if mcl clustering needed. 
+min_clust=3                #minimum cluster size.
+search_d=None              #search radius for heuristic.
+search_r=None              #increment factor for heuristic.
+walk_len=None              #maximum walk length for k-walk.
+walk_iterN=None            #iteration times for k-walk.
+sumfile='summary.txt'      #summary file for output. 
+
+argvs=sys.argv
+
+#get input parameters.
+#get algorithm.
+if '-a' in argvs:
+    index=argvs.index('-a')
+    algorithm=argvs[index+1]
+
+#get input network file
+if '-g' in argvs:
+    index=argvs.index('-g')
+    netfile=argvs[index+1]
+
+#get input terminal file
+if '-t' in argvs:
+    index=argvs.index('-t')
+    terminalfile=argvs[index+1]
+            
+#get OPTIONAL node score file.
+#for heuristic algorithm, this file is a must. 
+if '-n' in argvs:    
+    index=argvs.index('-n')
+    nodemetafile=argvs[index+1]
+
+#get the input shrinking radius.
+if '-s' in argvs:
+    index=argvs.index('-s')
+    shrink_d=argvs[index+1]
+
+#get the input local search radius for heuristic algorithm.
+if '-d' in argvs:
+    index=argvs.index('-d')
+    search_d=int(argvs[index+1])
+
+#get the input increment factor for heuristic algorithm.
+if '-r' in argvs:
+    index=argvs.index('-r')
+    search_r=float(argvs[index+1])
+
+#get the input maximum walk length for limited k-walk algorithm. 
+if '-L' in argvs:
+    index=argvs.index('-L')
+    walk_len=int(argvs[index+1])
+
+#get the input iteration times for limited k-walk algorithm. 
+if '-it' in argvs:
+    index=argvs.index('-it')
+    walk_iterN=int(argvs[index+1])    
+
+#if MCL is needed. 
+if '-cl' in argvs:
+    index=argvs.index('-cl')
+    mcl_status=argvs[index+1]
+
+#get the output locaiton.
+if '-o' in argvs:    
+    index=argvs.index('-o')
+    outputDir=argvs[index+1]    
+
+##################################################################################
+#parameter testing.
+#if help needed. 
+if '-h' in argvs:
+    print help_msg
+    sys.exit()
+
+#if version needed.
+if '-v' in argvs:
+    print version
+    sys.exit()
+
+#test parameter number.
+if len(argvs)==1:
+    print no_par_msg
+    print stop_msg
+    sys.exit()
+
+#test the validity of input parameters. 
+param_exit=0
+recog_list=['-h','-v','-a','-s','-g','-n','-t','-d','-r','-L','-it','-cl','-o']
+for item in argvs[1:]:
+    if item.startswith('-') and item not in recog_list:
+        print 'Parameter "%s" is not recognized by GenRev.\n'%item
+        param_exit=1
+if param_exit:
+    print 'GenRev terminated because of unrecognized parameters.\n'
+    sys.exit()
+
+#test algorithm input. 
+if algorithm == None:
+    print('Please specify an algorithm !\n')
+    print stop_msg
+    sys.exit()
+elif algorithm not in ['heuristic', 'steiner', 'kwalk']:
+    print 'Algorithm %s is not recognized.'%algorithm
+    print stop_msg
+    sys.exit()
+print 'User input algorithm is %s.'%algorithm    #A simple notification. 
+
+#test input network file.
+if netfile==None:
+    print('Please input network file !\n')
+    print stop_msg
+    sys.exit()
+
+#test input terminal file.
+if terminalfile==None:
+    print ('Please input terminal file !\n')
+    print stop_msg
+    sys.exit()
+
+#test algorithm specific parameters.
+if algorithm=='heuristic':
+    if nodemetafile==None:
+        print 'For heuristic algorithm, user must input node scores!\n'
+        print stop_msg
+        sys.exit()
+    if search_d == None:
+        search_d = 2              #set default local search radius.
+    if search_r == None:
+        search_r = 0.1            #set default local search increment factor.
+    shrink_d='FALSE'
+else:
+    if search_d != None:
+        print 'Warning: parameter -d is only valid for heurisitic algorithm, omitted.'
+    if search_r != None:
+        print 'Warning: parameter -r is only valid for heurisitic algorithm, omitted.'
+
+if algorithm=='kwalk':
+    if walk_len==None:
+        walk_len=50              #set default maximum walk length
+    if walk_iterN==None:
+        walk_iterN=1             #set iteration times
+else:
+    if walk_len != None:
+        print 'Warning: parameter -L is only valid for k-walk algorithm, omitted.'
+    if walk_iterN != None:
+        print 'Warning: parameter -it is only valid for k-walk algorithm, omitted.'
+
+#test shrinking factor.
+if shrink_d==None:
+    shrink_d=1                 #set default network shrinking factor
+elif shrink_d.isdigit():
+    shrink_d=int(shrink_d)
+    if shrink_d <= 0:
+        raise Exception('Informative factor should be positive integers!')
+elif shrink_d.upper() in ['FALSE','F']:
+    shrink_d=None
+
+#test mcl flag.
+if mcl_status==None:
+    mcl_status=1                 #set default MCL flag
+elif mcl_status.upper() in ['FALSE','F']:
+    mcl_status=0
+else:
+    mcl_status=1
+################################################################################################
+print 'Output directory is %s\n'%outputDir
+print 'For analysis summary, please refer to "%s".\n'%sumfile
+
+try:
+    os.makedirs(outputDir)
+    basepath=outputDir+'/'
+except:
+    if os.path.exists(outputDir):
+        print 'Output path already exists! Please specify another directory.\n'
+    else:
+        print 'Please make sure you have proper permissions to the specified directory!\n'
+    print stop_msg
+    sys.exit()
+
+###################################################################################################
+#read data into program
+rawG=read_edgelist(netfile)
+input_terminals=read_terminals(terminalfile)
+if nodemetafile:
+    nodemeta=read_nodes(nodemetafile)
+    G=layNode2Graph(rawG,nodemeta,attr='score')    #map scores to nodes
+else:
+    setNodeScore(rawG,default=1)                   #if no score mapped, set all scores to default value.
+    G=rawG.copy()
+
+terminals=set(input_terminals) & set(G.nodes())
+
+##network shrinking
+if algorithm=='heurisitic':
+    #print 'Network shrinking is omitted for heuristic algorithm.'
+    gG=G
+    #pass
+elif shrink_d==None:
+    #print 'No network shrinking is requested.'
+    gG=G
+    #pass
+else:
+    gG=tools.netShrink(G,terminals,bs=shrink_d)
+    #print 'After shrinking, order is %s'%gG.order()
+
+    
+#call individual modules
+print 'Network querying ...'
+if algorithm=='heuristic':
+    from Heuristic import *
+    setEdgeScore(gG,1)          #in this mode, edge weights are assumed equal.
+    mapAttr(gG)                 #map score to weight
+    subg=listQuery(gG,terminals,d=search_d,r=search_r)
+
+if algorithm=='steiner':
+    from NWSteiner import *
+    setEdgeScore(gG,1)         #in this mode, edge weights are assumed equal.
+    mapAttr(gG,entry='node',f=lambda x: 1/numpy.sqrt(x))       #inverse scores to weight
+    subg=NWSteiner(gG,terminals)
+
+if algorithm=='kwalk':
+    from kWalk import *       #in this mode, only edge weights are used for calculation of transition probability.
+    mapAttr(gG,entry='edge')   #map edge score to edge weight
+    subg=limkSearch(terminals, gG, L=walk_len, iteration=walk_iterN)
+
+
+#Rank genes
+print 'Gene ranking ...'
+dgtop=tools.geneRank(subg, by='degree', top=20)
+bttop=tools.geneRank(subg, by='betweenness', top=20)
+gwtop=tools.geneRank(subg, by='score', top=20)
+
+#MCL clustering
+if subg.order() < 2 or subg.order() > 500:    #if the subnetwork has less than 2, or more than 500
+    mcl_status=0                              #genes, neglect this operation. 
+    
+if mcl_status:
+    print 'Network clustering ...'
+    partition=tools.MCL(subg)
+    Qmod=tools.modularity(subg, partition)
+
+#########################################################################
+#output the global network and its attributes.
+#output the subnetwork and its attributes.
+#output terminals
+#output the log file, including parameters used, time, etc. 
+
+print 'Writing files to output directory ...'
+
+globalNetFile=basepath+'global_net.sif'         #the network
+globalNodeFile_w=basepath+'global_node_score.noa'       #the node weight
+globalNodeFile_c=basepath+'global_node_cat.noa'          #the node category
+globalEdgeFile_w=basepath+'global_edge_score.eda'       #the edge weight
+globalEdgeFile_c=basepath+'global_edge_cat.eda'       #the edge category
+
+attrs=determCat(G, subg, terminals=terminals)
+
+writeSif(G,globalNetFile)    ####
+writeNodeAttr(G, globalNodeFile_c, attrName='NodeCategory', attrValues=attrs[0],Class='String')   ###
+writeNodeAttr(G, globalNodeFile_w, attrName='NodeScore', attrValues=extNodeAttr(G,attr='score'),Class='Double')  ##
+writeEdgeAttr(G, globalEdgeFile_c, attrName='EdgeCategory', attrValues=attrs[1], Class='String')   ###
+writeEdgeAttr(G, globalEdgeFile_w, attrName='EdgeScore', attrValues=extEdgeAttr(G,attr='score'), Class='Double')   ###
+
+################################
+
+subNetFile=basepath+'sub_net.sif'
+subNodeFile_w=basepath+'sub_node_score.noa'
+subNodeFile_c=basepath+'sub_node_cat.noa'
+subEdgeFile_w=basepath+'sub_edge_score.eda'
+subEdgeFile_c=basepath+'sub_edge_cat.eda'
+
+attrs=determCat(G=subg, terminals=terminals)
+
+writeSif(subg,subNetFile)
+writeNodeAttr(subg, subNodeFile_c, attrName='NodeCategory', attrValues=attrs[0],Class='String')   ###
+writeNodeAttr(subg, subNodeFile_w, attrName='NodeScore', attrValues=extNodeAttr(subg,attr='score'),Class='Double')
+writeEdgeAttr(subg, subEdgeFile_c, attrName='EdgeCategory', attrValues=attrs[1],Class='String')
+writeEdgeAttr(subg, subEdgeFile_w, attrName='EdgeScore', attrValues=extEdgeAttr(subg,attr='score'),Class='Double')
+
+################################
+#output the terminals
+termFile=basepath+'terminals.txt'
+
+output_seed=open(termFile, 'w')
+output_seed.write('#Terminals used in the calculation.\n')
+for item in terminals:
+    output_seed.write('%s\n'%item)
+output_seed.close()
+
+#################################
+#Output the modules 
+mclFile=basepath+'modules.txt'
+
+if mcl_status:
+    mcl_file=open(mclFile,'w')
+    mcl_file.write('#Graph clustering to the subnetwork by MCL algorithm.\n')
+    mcl_file.write('#Each line is a module.\n')
+    mcl_file.write('#Division modularity: %s\n'%Qmod)
+    for part in partition:
+        if len(part) >= min_clust:
+            mcl_file.write(' '.join(part))
+            mcl_file.write('\n')
+    mcl_file.close()
+else:
+   print mcl_non_msg         
+
+##################################
+#Output the ranked gene list
+rkFile=basepath+'gene_rank.txt'
+
+rk_file=open(rkFile,'w')
+rk_file.write('#The first column is gene name.\n')
+for measure in ['degree','betweenness','score']:
+    if measure=='degree':
+        rgL=dgtop
+    elif measure=='betweenness':
+        rgL=bttop
+    elif measure=='score':
+        rgL=gwtop
+    rk_file.write('#%s\n'%measure)
+    for item in rgL:
+        rk_file.write('\t'.join([str(x) for x in item]))
+        rk_file.write('\n')
+    rk_file.write('\n')
+
+rk_file.close()
+#############################################################################
+#output the summary report
+output_sum=open(basepath+'%s'%sumfile,'w')
+output_sum.write('GeneRev analysis report\n')
+output_sum.write('Output directory: %s\n'%outputDir)
+output_sum.write('%s\n'%time.asctime())
+output_sum.write('Your input paramters:\n')
+output_sum.write('%s\n'%(' '.join(argvs)))
+
+#output_sum.write('\n')
+output_sum.write('#'*80+'\n')
+#output_sum.write('\n')
+
+output_sum.write('Input network nodes: %s\n'%rawG.order())
+output_sum.write('Input network edges: %s\n'%rawG.size())
+output_sum.write('Input terminals: %s\n'%len(input_terminals))
+output_sum.write('#After overlaying node information ... \n')
+output_sum.write('Global network (used in analysis) nodes: %s\n'%G.order())
+output_sum.write('Global network (used in analysis) edges: %s\n'%G.size())
+output_sum.write('Terminals (used in the global network): %s\n'%len(terminals))
+
+output_sum.write('#Input\n')
+output_sum.write('Terminals written to: %s\n'%termFile)
+
+output_sum.write('Global network written to: %s\n'%globalNetFile)
+output_sum.write('Global network node category written to: %s\n'%globalNodeFile_c)
+output_sum.write('Global network node score written to: %s\n'%globalNodeFile_w)
+output_sum.write('Global network edge category written to: %s\n'%globalEdgeFile_c)
+output_sum.write('Global network edge score written to: %s\n'%globalEdgeFile_w)
+output_sum.write('\n')
+
+output_sum.write('#Output\n')
+output_sum.write('Subnetwork written to: %s\n'%subNetFile)
+output_sum.write('Subnetwork node category written to: %s\n'%subNodeFile_c)
+output_sum.write('Subnetwork node score written to: %s\n'%subNodeFile_w)
+output_sum.write('Subnetwork edge category written to: %s\n'%subEdgeFile_c)
+output_sum.write('Subnetwork edge score written to: %s\n'%subEdgeFile_w)
+output_sum.write('\n')
+
+output_sum.write('#Analysis\n')
+output_sum.write('Gene ranking of subnetwork written to: %s\n'%rkFile)
+if mcl_status: 
+    output_sum.write('Modules written to: %s\n'%mclFile)
+
+#contact or ref
+output_sum.write('\n')
+output_sum.write('#For citation or feedbacks, please read the document.\n')
+output_sum.write('#Department of Biomedical Informatics, Vanderbilt University\n')
+
+output_sum.close()
+
+
+
+if __name__=='__main__':
+    pass
+    '''
+    print 'Testing calling module...'
+    print 'algorithm:', algorithm
+    print 'shrink:', shrink_d
+    print 'network:', netfile
+    print 'node file:', nodemetafile
+    print 'term file:', terminalfile
+    print 'output:', outputDir 
+    print 'mcl:', mcl_status 
+    print 'search d:', search_d
+    print 'search r:', search_r
+    print 'walk length:', walk_len
+    print 'walk iteration:', walk_iterN
+    '''
+  
+    
+
+
+
+
+
