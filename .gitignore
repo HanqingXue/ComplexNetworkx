@@ -2,3 +2,4 @@ HumanNet/*
 testdata/*
 pathway/*
 *.pyc
+*.txt
