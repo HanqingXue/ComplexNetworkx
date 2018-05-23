@@ -1,0 +1,5 @@
+SDSL BCAT2 {'score': 1}
+SDSL BCAT1 {'score': 1}
+BCAT2 BCAT1 {'score': 1}
+BCAT2 SDS {'score': 1}
+BCAT1 SDS {'score': 1}

@@ -10,14 +10,12 @@ def bench_np():
 	    a = a.dot(b)  
 
 def bench_gnp():
-	n = 4000  
-	for i in range(10):  
-	    a = np.random.uniform(low=0., high=1., size=(n, n)).astype(np.float32)    
-	    b = np.random.uniform(low=0., high=1., size=(n, n)).astype(np.float32)  
-	    ga = gpu.garray(a)  
-	    gb = gpu.garray(b)  
-	  
-	    ga = ga.dot(gb)
+	n = 40000  
+	a = np.random.uniform(low=0., high=1., size=(n, n)).astype(np.float32)    
+	b = np.random.uniform(low=0., high=1., size=(n, n)).astype(np.float32)  
+	ga = gpu.garray(a)  
+	gb = gpu.garray(b)  
+	ga = ga.dot(gb)
 
 def main():
 	t1 = time.time()

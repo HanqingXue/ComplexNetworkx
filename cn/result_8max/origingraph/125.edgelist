@@ -1,0 +1,5 @@
+MOCS3 MOCS2 {'score': 1}
+MOCS3 URM1 {'score': 1}
+URM1 CTU1 {'score': 1}
+MOCS2 MPST {'score': 1}
+MOCS2 TST {'score': 1}

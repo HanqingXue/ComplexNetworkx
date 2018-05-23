@@ -299,12 +299,13 @@ if __name__=='__main__':
 
     print 'Pathway data...'
     term=read_terminals('testdata/terminal.txt')
-    seed = get_k_neighbor_term(G, term, 2)
-    print seed
-
-
+    seed = get_k_neighbor_term(G, term, 3)
+    
+    org_graph = G.subgraph(term)
 
     small = G.subgraph(list(seed))
+    print 'Nodes:{0}'.format(len(small.nodes()))
+    print 'Edges:{0}'.format(len(small.edges()))
     print 'Before expansion...'
    
 
@@ -317,5 +318,11 @@ if __name__=='__main__':
     #print g.edges()
     #print set(small.edges()) - set(g.edges())
     t2=time.time()
+    if g.edges() == org_graph.edges():
+        print 'Expansion no nodes'
+    else:
+        print 
+        print 'Expansion {0} edges'.format(len(g.edges()) - len(org_graph.edges()))
+
     print 'Running Time:'
     print t2 - t1

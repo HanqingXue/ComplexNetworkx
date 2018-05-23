@@ -1,0 +1,6 @@
+PAPSS1 IMPAD1 {'score': 1}
+PAPSS1 PAPSS2 {'score': 1}
+PAPSS1 BPNT1 {'score': 1}
+PAPSS2 IMPAD1 {'score': 1}
+PAPSS2 BPNT1 {'score': 1}
+SQRDL ETHE1 {'score': 1}
