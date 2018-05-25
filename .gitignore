@@ -3,3 +3,4 @@ testdata/*
 pathway/*
 *.pyc
 *.txt
+*.json
